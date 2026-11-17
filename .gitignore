@@ -1,0 +1,23 @@
+# secrets — never commit real credentials
+scraper/config.json
+
+# python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# scraper output
+scraper/*.json
+!scraper/config.example.json
+
+# build artifacts
+hedge-slip.zip
+
+# node backend
+node_modules/
+
+# sqlite database (your personal history — never commit)
+hedge.db
+hedge.db-shm
+hedge.db-wal

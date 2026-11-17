@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hedge Slip – history dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .tiles{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:0 0 8px}
+  .tile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+  .tile .k{color:var(--muted);font-size:.82rem;margin:0 0 6px}
+  .tile .v{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:1.8rem;line-height:1}
+  table.hist{width:100%;border-collapse:collapse;font-size:.92rem}
+  table.hist th,table.hist td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  table.hist th{color:var(--muted);font-weight:600}
+  table.hist td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .ev{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.78rem;font-weight:600}
+  .ev.saved{background:var(--b-soft);color:var(--b)}
+  .ev.settled{background:var(--win-soft);color:var(--win)}
+  .ev.reopened,.ev.updated{background:var(--a-soft);color:var(--a)}
+  .ev.deleted{background:var(--loss-soft);color:var(--loss)}
+  .ev.bankroll,.ev.month_paid,.ev.month_unpaid{background:var(--x-soft);color:var(--x)}
+  .muted{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="dash-head">
+      <h1>History dashboard</h1>
+      <a class="small" href="/">← Back to calculator</a>
+    </div>
+    <p>Everything saved to the database — survives cache clears, browsers and devices. <span id="dbnote" class="muted"></span></p>
+  </header>
+
+  <section class="panel">
+    <h2>Totals</h2>
+    <div class="tiles" id="tiles"></div>
+  </section>
+
+  <section class="panel" style="margin-top:24px">
+    <h2>By month (settlement cash)</h2>
+    <div class="tbl-wrap"><table class="hist" id="months"><tbody></tbody></table></div>
+  </section>
+
+  <section class="panel" style="margin-top:24px">
+    <div class="dash-head">
+      <h2>Activity history</h2>
+      <span class="muted" id="evcount"></span>
+    </div>
+    <div class="tbl-wrap"><table class="hist" id="events"><tbody></tbody></table></div>
+  </section>
+</div>
+<script src="dashboard.js"></script>
+</body>
+</html>

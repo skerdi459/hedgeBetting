@@ -1,0 +1,11 @@
+{
+  "odds_url": "https://YOUR-BOOKMAKER/sport/football",
+  "login_url": "https://YOUR-BOOKMAKER/login",
+  "username": "",
+  "password": "",
+  "selectors": {
+    "user": "input[name=username]",
+    "pass": "input[name=password]",
+    "submit": "button[type=submit]"
+  }
+}

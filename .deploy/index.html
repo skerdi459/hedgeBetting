@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hedge Slip – cashback arbitrage calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E6EBEE; --surface:#FFFFFF; --slip:#FFFDF7; --ink:#16202E; --muted:#556272; --line:#CBD3DA;
+  --a:#9A6514; --a-soft:#F6E7CC; --b:#1D6676; --b-soft:#D5ECF0; --x:#5546A0; --x-soft:#E4E0F7;
+  --win:#16764B; --win-soft:#DCF1E6; --loss:#B0362D; --loss-soft:#F8E0DD; --focus:#2B6CB0;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#11161E; --surface:#1A222D; --slip:#1F2834; --ink:#E7ECF1; --muted:#9DA9B6; --line:#2E3A49;
+    --a:#E6AE52; --a-soft:#3A2E19; --b:#5BBDCE; --b-soft:#17323A; --x:#AA9CF0; --x-soft:#2A2543;
+    --win:#52C990; --win-soft:#16332A; --loss:#F0857A; --loss-soft:#3A1F1D; --focus:#7FB2F0;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11161E; --surface:#1A222D; --slip:#1F2834; --ink:#E7ECF1; --muted:#9DA9B6; --line:#2E3A49;
+  --a:#E6AE52; --a-soft:#3A2E19; --b:#5BBDCE; --b-soft:#17323A; --x:#AA9CF0; --x-soft:#2A2543;
+  --win:#52C990; --win-soft:#16332A; --loss:#F0857A; --loss-soft:#3A1F1D; --focus:#7FB2F0;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding:28px 20px 48px}
+header{margin-bottom:24px}
+h1{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-size:2.4rem;line-height:1;margin:0 0 6px;letter-spacing:.01em}
+header p{margin:0;color:var(--muted);max-width:62ch}
+.grid{display:grid;gap:24px;grid-template-columns:1fr}
+@media (min-width:900px){.grid{grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);align-items:start}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px}
+h2{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:600;font-size:1.35rem;margin:0 0 12px}
+label{display:block;font-size:.9rem;color:var(--muted);margin-bottom:4px}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.row{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));margin-bottom:16px}
+.odds{width:100%;border-collapse:separate;border-spacing:6px 6px;margin:0 -6px 12px}
+.odds th{font-weight:600;font-size:.9rem;text-align:left;padding:0 2px}
+.odds th.a{color:var(--a)} .odds th.b{color:var(--b)} .odds th.x{color:var(--x)}
+.odds td:first-child{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:1.25rem;width:2.2em;text-align:center}
+.odds input{text-align:center;font-variant-numeric:tabular-nums}
+.odds input.a{border-color:var(--a)} .odds input.b{border-color:var(--b)} .odds input.x{border-color:var(--x)}
+.hint{font-size:.85rem;color:var(--muted);margin:0 0 16px}
+.btns{display:flex;gap:10px;flex-wrap:wrap}
+button{font:inherit;font-weight:600;border-radius:6px;padding:9px 16px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.primary{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+
+/* the slip */
+.slip{background:var(--slip);border:1px solid var(--line);border-radius:4px 4px 10px 10px;padding:22px 20px 20px;position:relative}
+.slip::before{content:"";position:absolute;left:-1px;right:-1px;top:-9px;height:10px;
+  background:radial-gradient(circle at 8px -2px,transparent 7px,var(--slip) 7.5px) 0 0/16px 10px repeat-x}
+.match{font-size:.95rem;color:var(--muted);margin:0 0 4px}
+.verdict{font-family:"Barlow Condensed","Arial Narrow",sans-serif;font-weight:700;font-size:2.6rem;line-height:1.05;margin:0}
+.verdict.play{color:var(--win)} .verdict.thin{color:var(--a)} .verdict.skip{color:var(--loss)}
+.sub{margin:4px 0 18px;color:var(--muted)}
+.sub strong{color:var(--ink)}
+.steps{list-style:none;margin:0 0 18px;padding:0;counter-reset:s}
+.steps li{counter-increment:s;display:grid;grid-template-columns:2rem 1fr;gap:10px;padding:10px 0;border-top:1px dashed var(--line)}
+.steps li::before{content:counter(s);font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:1.3rem;width:2rem;height:2rem;border-radius:50%;display:grid;place-items:center;background:var(--bg)}
+.steps li.a::before{background:var(--a-soft);color:var(--a)} .steps li.b::before{background:var(--b-soft);color:var(--b)} .steps li.x::before{background:var(--x-soft);color:var(--x)}
+.steps .amt{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:1.35rem}
+.steps .where{font-size:.9rem;color:var(--muted)}
+.tbl-wrap{overflow-x:auto}
+table.res{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;margin-bottom:8px}
+table.res th,table.res td{padding:7px 8px;text-align:left;border-bottom:1px solid var(--line)}
+table.res th{font-size:.85rem;color:var(--muted);font-weight:500}
+table.res td.n{text-align:right;font-weight:600}
+.pos{color:var(--win)} .neg{color:var(--loss)}
+.note{font-size:.85rem;color:var(--muted);margin:10px 0 0}
+.opts{list-style:none;margin:0;padding:0}
+.opts li{margin:0 0 6px}
+.opts button{width:100%;display:flex;justify-content:space-between;gap:12px;text-align:left;font-weight:500;background:var(--surface)}
+.opts button[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 3px 0 0 var(--ink)}
+.opts .p{font-weight:600;white-space:nowrap}
+.empty{color:var(--muted);margin:0}
+section+section{margin-top:22px}
+.hist{list-style:none;margin:0;padding:0}
+.hist li{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:.95rem}
+.hist .del{padding:4px 10px;font-size:.85rem;font-weight:500}
+.hist .load{background:none;border:none;padding:0;text-align:left;color:var(--ink);font-weight:500;text-decoration:underline;text-underline-offset:3px}
+@media (prefers-reduced-motion:no-preference){.verdict{transition:color .2s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Hedge Slip</h1>
+    <p>Enter the odds from Site A (the one that refunds part of a losing stake) and from Site B or an exchange. The slip tells you whether to play the match and exactly what to bet where.</p>
+  </header>
+
+  <div class="panel" id="livePanel" style="margin-bottom:24px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
+      <h2 style="margin:0">Live matches · Site A (Vegas) × Site B (Polymarket)</h2>
+      <span class="hint" id="liveMeta" style="margin:0"></span>
+    </div>
+    <div class="tbl-wrap"><table class="res" id="liveTable"></table></div>
+    <p class="note" id="liveEmpty">No scraped data yet. Run <code>scraper/build_arb.py</code> to fill this in, then reload.</p>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2>The match</h2>
+        <div class="row">
+          <div style="grid-column:1/-1"><label for="match">Match</label><input id="match" type="text" placeholder="e.g. Partizani – Tirana"></div>
+          <div><label for="stake">Site A stake (€)</label><input id="stake" type="text" inputmode="decimal" value="1000"></div>
+          <div><label for="acomm">Site A commission (%)</label><input id="acomm" type="text" inputmode="decimal" value="8"></div>
+          <div><label for="refund">Site A loss refund (%)</label><input id="refund" type="text" inputmode="decimal" value="20"></div>
+        </div>
+        <p class="hint" style="margin-top:-6px">Site A pays <strong>8% of everything you stake there</strong> (every result — guaranteed) plus <strong>20% of your Site A loss</strong> (only when the Site A pick loses).</p>
+
+        <h2>Odds</h2>
+        <table class="odds">
+          <thead><tr><th></th><th class="a">Site A</th><th class="b">Site B</th><th class="x">Exchange lay</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><input class="a" id="a0" inputmode="decimal" aria-label="Site A odds for 1"></td><td><input class="b" id="b0" inputmode="decimal" aria-label="Site B odds for 1"></td><td><input class="x" id="l0" inputmode="decimal" aria-label="Exchange lay odds for 1"></td></tr>
+            <tr><td>X</td><td><input class="a" id="a1" inputmode="decimal" aria-label="Site A odds for X"></td><td><input class="b" id="b1" inputmode="decimal" aria-label="Site B odds for X"></td><td><input class="x" id="l1" inputmode="decimal" aria-label="Exchange lay odds for X"></td></tr>
+            <tr><td>2</td><td><input class="a" id="a2" inputmode="decimal" aria-label="Site A odds for 2"></td><td><input class="b" id="b2" inputmode="decimal" aria-label="Site B odds for 2"></td><td><input class="x" id="l2" inputmode="decimal" aria-label="Exchange lay odds for 2"></td></tr>
+          </tbody>
+        </table>
+        <p class="hint">Decimal odds. Commas work too (3,26). Exchange lay odds are optional; leave them empty if you only use bookmakers.</p>
+
+        <div class="row">
+          <div><label for="comm">Exchange commission (%)</label><input id="comm" type="text" inputmode="decimal" value="2"></div>
+          <div><label for="minp">Minimum profit (% of stake)</label><input id="minp" type="text" inputmode="decimal" value="3"></div>
+          <div><label for="round">Round stakes to</label>
+            <select id="round"><option value="0.01">€0.01</option><option value="0.5">€0.50</option><option value="1" selected>€1</option><option value="5">€5</option></select></div>
+        </div>
+        <div class="btns">
+          <button class="primary" id="save">Save to history</button>
+          <button id="clear">Clear odds</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="slip" id="slip" aria-live="polite"></div>
+
+      <div class="panel" style="margin-top:24px">
+        <h2>History</h2>
+        <ul class="hist" id="hist"></ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script id="live-data">
+/*LIVE_DATA_START*/
+window.LIVE_MATCHES = [{"name": "Switzerland–Scotland", "time": "20:45", "a": [1.76, 3.77, 4.83], "b": [1.87, 3.92, 4.65], "polyTitle": "Switzerland vs. Scotland", "polyMargin": 1.005, "vegasMargin": 1.0405}, {"name": "Israel–Austria", "time": "20:45", "a": [4.42, 3.96, 1.78], "b": [4.65, 4.08, 1.83], "polyTitle": "Israel vs. Austria", "polyMargin": 1.005, "vegasMargin": 1.0406}, {"name": "Kazakhstan–Slovakia", "time": "16:00", "a": [4.18, 3.6, 1.91], "b": [4.44, 3.64, 1.98], "polyTitle": "Kazakhstan vs. Slovakia", "polyMargin": 1.005, "vegasMargin": 1.0406}, {"name": "Denmark–Norway", "time": "20:45", "a": [2.4, 3.84, 2.75], "b": [2.53, 4.08, 2.74], "polyTitle": "Denmark vs. Norway", "polyMargin": 1.005, "vegasMargin": 1.0407}, {"name": "Germany–Netherlands", "time": "20:45", "a": [1.9, 4.21, 3.61], "b": [1.94, 4.44, 3.64], "polyTitle": "Germany vs. Netherlands", "polyMargin": 1.015, "vegasMargin": 1.0409}, {"name": "Hungary–Northern Ireland", "time": "20:45", "a": [1.94, 3.42, 4.29], "b": [1.98, 3.51, 4.44], "polyTitle": "Hungary vs. Northern Ireland", "polyMargin": 1.015, "vegasMargin": 1.041}, {"name": "Estonia–Bulgaria", "time": "18:00", "a": [1.99, 3.43, 4.05], "b": [2.02, 3.51, 4.65], "polyTitle": "Estonia vs. Bulgaria", "polyMargin": 0.995, "vegasMargin": 1.041}, {"name": "Iceland–Luxembourg", "time": "18:00", "a": [1.23, 6.28, 14.55], "b": [1.23, 7.41, 18.18], "polyTitle": "Iceland vs. Luxembourg", "polyMargin": 1.005, "vegasMargin": 1.041}, {"name": "Bosnia and Herzegovina–Romania", "time": "20:45", "a": [1.88, 3.73, 4.15], "b": [1.94, 3.92, 4.26], "polyTitle": "Bosnia and Herzegovina vs. Romania", "polyMargin": 1.005, "vegasMargin": 1.041}, {"name": "Greece–Serbia", "time": "20:45", "a": [1.46, 4.76, 6.85], "b": [1.48, 5.13, 8.0], "polyTitle": "Greece vs. Serbia", "polyMargin": 0.995, "vegasMargin": 1.041}, {"name": "Ukraine–Georgia", "time": "20:45", "a": [2.23, 3.35, 3.4], "b": [2.22, 3.45, 3.7], "polyTitle": "Ukraine vs. Georgia", "polyMargin": 1.01, "vegasMargin": 1.0411}, {"name": "North Macedonia–Slovenia", "time": "20:45", "a": [7.12, 3.98, 1.54], "b": [8.7, 4.26, 1.55], "polyTitle": "North Macedonia vs. Slovenia", "polyMargin": 0.995, "vegasMargin": 1.0411}, {"name": "Ireland–Kosovo", "time": "20:45", "a": [2.15, 3.19, 3.81], "b": [2.2, 3.28, 4.08], "polyTitle": "Republic of Ireland vs. Kosovo", "polyMargin": 1.005, "vegasMargin": 1.0411}, {"name": "Faroe Islands–Moldova", "time": "16:00", "a": [1.77, 3.57, 5.1], "b": [1.94, 3.51, 4.88], "polyTitle": "Faroe Islands vs. Moldova", "polyMargin": 1.005, "vegasMargin": 1.0412}, {"name": "Poland–Sweden", "time": "20:45", "a": [2.25, 3.66, 3.09], "b": [2.41, 3.92, 2.99], "polyTitle": "Poland vs. Sweden", "polyMargin": 1.005, "vegasMargin": 1.0413}, {"name": "Gibraltar–Malta", "time": "20:45", "a": [7.67, 3.76, 1.55], "b": [8.7, 3.92, 1.57], "polyTitle": "Gibraltar vs. Malta", "polyMargin": 1.005, "vegasMargin": 1.0415}, {"name": "Wales–Portugal", "time": "20:45", "a": [7.09, 4.97, 1.43], "b": [7.41, 5.41, 1.48], "polyTitle": "Wales vs. Portugal", "polyMargin": 0.995, "vegasMargin": 1.0416}, {"name": "Lithuania–Liechtenstein", "time": "18:00", "a": [1.12, 8.58, 30.0], "b": [1.13, 10.53, 47.62], "polyTitle": "Lithuania vs. Liechtenstein", "polyMargin": 1.001, "vegasMargin": 1.0427}];
+window.LIVE_META = {"generatedAt": "2026-11-16 14:04", "comm": 0.08, "loss": 0.2, "source": "vegas+polymarket"};
+/*LIVE_DATA_END*/
+</script>
+<script>
+(function(){
+  const OUT = ["1","X","2"];
+  const $ = id => document.getElementById(id);
+  const ids = ["match","stake","acomm","refund","comm","minp","round","a0","a1","a2","b0","b1","b2","l0","l1","l2"];
+  let selected = null;     // key of option chosen by the user
+  let lastCalc = null;
+
+  const num = v => { const n = parseFloat(String(v).trim().replace(",", ".")); return isFinite(n) ? n : null; };
+  const odd = v => { const n = num(v); return n && n > 1 ? n : null; };
+  const eur = (n, sign) => (sign ? (n > 0.004 ? "+" : n < -0.004 ? "−" : "") : (n < 0 ? "−" : "")) + "€" + Math.abs(n).toLocaleString("en-IE",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const pct = n => (n >= 0 ? "+" : "−") + Math.abs(n * 100).toFixed(1) + "%";
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+  // Model: Site A pays tc = 8% on turnover (every result, guaranteed) + r = 20%
+  // of the Site A loss (only when the Site A pick loses). Covers sit on Site B
+  // (Polymarket) or an exchange, so only the back stake runs through Site A.
+  function calc(){
+    const S = num($("stake").value);
+    const tc = (num($("acomm").value) ?? 0) / 100;   // 8% Site A turnover commission
+    const r  = (num($("refund").value) ?? 0) / 100;   // 20% Site A loss refund
+    const c  = (num($("comm").value) ?? 0) / 100;     // exchange commission
+    const minP = (num($("minp").value) ?? 0) / 100;
+    const step = num($("round").value) || 0.01;
+    const rnd = x => Math.round(x / step) * step;
+    const A = [0,1,2].map(i => odd($("a"+i).value));
+    const B = [0,1,2].map(i => odd($("b"+i).value));
+    const L = [0,1,2].map(i => odd($("l"+i).value));
+    const opts = [];
+    if (!S || S <= 0) return {S, tc, r, opts, minP, error:"Enter your Site A stake to start."};
+
+    for (let k = 0; k < 3; k++){
+      const a = A[k]; if (!a) continue;
+      const others = [0,1,2].filter(j => j !== k);
+      // cover the other two on Site B, sized to equalise settlement across results
+      if (others.every(j => B[j])){
+        const bets = others.map(j => ({j, odds:B[j], amt:rnd(S * a / B[j])}));
+        const total = bets.reduce((s,b) => s + b.amt, 0);
+        const settle = [0,1,2].map(i => i === k ? S*(a-1) - total : -S + bets.find(b => b.j === i).amt * B[i] - total);
+        opts.push(build({key:"b"+k, type:"book", k, a, bets, total, settle, money:S + total}, S, tc, r));
+      }
+      // lay k on the exchange
+      if (L[k] && L[k] - c > 0){
+        const lay = rnd(S * a / (L[k] - c)), liab = lay * (L[k] - 1);
+        const settle = [0,1,2].map(i => i === k ? S*(a-1) - liab : -S + lay*(1-c));
+        opts.push(build({key:"l"+k, type:"lay", k, a, lodds:L[k], lay, liab, settle, money:S + liab}, S, tc, r));
+      }
+    }
+    opts.sort((x,y) => y.minGuar - x.minGuar);
+    let error = null;
+    if (!A.some(Boolean)) error = "Enter at least one Site A odd.";
+    else if (!opts.length) error = "Add Site B odds for the other two results, or an exchange lay odd for the result you back on Site A.";
+    return {S, tc, r, opts, minP, error};
+  }
+
+  // Attach the 8% commission (unconditional) and the 20% loss refund (only on
+  // results where the Site A pick k loses).
+  function build(o, S, tc, r){
+    o.turnoverA = S;                        // only the back bet runs through Site A
+    o.commission = tc * S;                  // 8% of turnover, paid on every result
+    o.refund = [0,1,2].map(i => i === o.k ? 0 : r * S); // Site A pick lost -> 20% of the S loss
+    o.guaranteed = o.settle.map(v => v + o.commission);
+    o.total = o.settle.map((v,i) => v + o.commission + o.refund[i]);
+    o.minSettle = Math.min(...o.settle);
+    o.minGuar = o.minSettle + o.commission; // guaranteed on EVERY result (incl. 8%)
+    o.minTotal = Math.min(...o.total);      // worst case once the refund is counted
+    o.maxTotal = Math.max(...o.total);
+    o.sureBet = o.minGuar > 0.004;
+    return o;
+  }
+
+  function optLabel(o){
+    return `Back ${OUT[o.k]} on Site A, ` + (o.type === "book" ? "cover the other two on Site B" : `lay ${OUT[o.k]} on the exchange`);
+  }
+
+  function render(){
+    const d = calc(); lastCalc = d;
+    const slip = $("slip"), m = $("match").value.trim();
+    if (d.error){
+      slip.innerHTML = `<p class="match">${esc(m || "New match")}</p><p class="verdict thin">Waiting for odds</p><p class="sub">${d.error}</p>`;
+      return;
+    }
+    const best = d.opts[0];
+    const o = d.opts.find(x => x.key === selected) || best;
+    const isBest = o === best;
+    const tcp = Math.round(d.tc * 100), rp = Math.round(d.r * 100);
+
+    const v = best.minGuar >= d.minP * d.S && best.sureBet ? "play" : best.maxTotal > 0 ? "thin" : "skip";
+    const vText = {play:"Perfect bet — guaranteed", thin:"Playable via refund", skip:"Skip this match"}[v];
+    const vSub = v === "play"
+      ? `Guaranteed <strong>${eur(best.minGuar,true)}</strong> (${pct(best.minGuar/d.S)} of stake) on <em>every</em> result, from the ${tcp}% commission alone. The ${rp}% loss refund (up to <strong>${eur(Math.max(...best.refund))}</strong>) is extra whenever the Site A pick loses.`
+      : v === "thin"
+      ? `Not guaranteed by the ${tcp}% commission alone (worst case ${eur(best.minGuar,true)}). You come out ahead once the ${rp}% loss refund lands — up to <strong>${eur(best.maxTotal,true)}</strong> if the Site A pick loses.`
+      : `Even with the ${tcp}% commission and ${rp}% refund the worst case is <strong>${eur(best.minTotal,true)}</strong>. Better Site B odds are needed.`;
+
+    let steps = `<li class="a"><div><div class="amt">${eur(d.S)} on ${OUT[o.k]}</div><div class="where">Site A at odds ${o.a.toFixed(2)} · earns ${tcp}% = ${eur(o.commission)}</div></div></li>`;
+    if (o.type === "book"){
+      o.bets.forEach(b => steps += `<li class="b"><div><div class="amt">${eur(b.amt)} on ${OUT[b.j]}</div><div class="where">Site B at odds ${b.odds.toFixed(2)}</div></div></li>`);
+    } else {
+      steps += `<li class="x"><div><div class="amt">Lay ${OUT[o.k]}, stake ${eur(o.lay)}</div><div class="where">Exchange at lay odds ${o.lodds.toFixed(2)} · liability ${eur(o.liab)}</div></div></li>`;
+    }
+
+    const rows = [0,1,2].map(i =>
+      `<tr><td>${OUT[i]} wins${i === o.k ? " (Site A pick)" : ""}</td>` +
+      `<td class="n ${o.settle[i] >= 0 ? "pos" : "neg"}">${eur(o.settle[i],true)}</td>` +
+      `<td class="n pos">${eur(o.commission,true)}</td>` +
+      `<td class="n">${o.refund[i] > 0 ? eur(o.refund[i],true) : "—"}</td>` +
+      `<td class="n ${o.total[i] >= 0 ? "pos" : "neg"}">${eur(o.total[i],true)}</td></tr>`).join("");
+
+    const others = d.opts.map(x => `<li><button type="button" data-key="${x.key}" aria-pressed="${x === o}"><span>${optLabel(x)}${x.sureBet ? ' <strong class="pos">✓ sure</strong>' : ""}</span><span class="p ${x.minGuar >= 0 ? "pos" : "neg"}">${eur(x.minGuar,true)}</span></button></li>`).join("");
+
+    slip.innerHTML = `
+      <p class="match">${esc(m || "Unnamed match")} · stake ${eur(d.S)}</p>
+      <p class="verdict ${v}">${vText}</p>
+      <p class="sub">${vSub}</p>
+      <section>
+        <h2>${isBest ? "How to play it" : "Your chosen option"}</h2>
+        <ol class="steps">${steps}</ol>
+        <p class="note">Money needed in total: <strong>${eur(o.money)}</strong> (${eur(d.S)} on Site A + ${eur(o.money - d.S)} on Site B). Place one bet, confirm it was accepted, then the next. If odds change, update them here first.</p>
+      </section>
+      <section>
+        <h2>What you end with</h2>
+        <div class="tbl-wrap"><table class="res"><thead><tr><th>Result</th><th style="text-align:right">Settlement</th><th style="text-align:right">+${tcp}% comm</th><th style="text-align:right">+${rp}% refund</th><th style="text-align:right">Total</th></tr></thead><tbody>${rows}</tbody></table></div>
+        <p class="note">The <strong>${tcp}% commission (${eur(o.commission)})</strong> is paid on every result — guaranteed. The <strong>${rp}% refund</strong> only applies when the Site A pick loses (real refund is ${rp}% of your monthly <em>net</em> Site A loss, so a winning pick reduces it). Rounded stakes can shift figures a few cents.</p>
+      </section>
+      <section>
+        <h2>All options, guaranteed result (✓ = profit every result)</h2>
+        <ul class="opts">${others}</ul>
+      </section>`;
+    slip.querySelectorAll(".opts button").forEach(b => b.addEventListener("click", () => { selected = b.dataset.key; render(); }));
+  }
+
+  // history (per-browser)
+  const HK = "hedge-slip-history";
+  const loadHist = () => { try { return JSON.parse(localStorage.getItem(HK)) || []; } catch(e){ return []; } };
+  const saveHist = h => { try { localStorage.setItem(HK, JSON.stringify(h)); } catch(e){} };
+  function renderHist(){
+    const h = loadHist(), ul = $("hist");
+    if (!h.length){ ul.innerHTML = `<li><span class="empty">Saved matches appear here. Use “Save to history” after entering odds.</span></li>`; return; }
+    ul.innerHTML = h.map((e,i) => `<li><button class="load" data-i="${i}">${esc(e.name)}</button><span class="${e.profit >= 0 ? "pos" : "neg"}">${eur(e.profit,true)}</span><button class="del" data-del="${i}" aria-label="Delete ${esc(e.name)}">Delete</button></li>`).join("");
+    ul.querySelectorAll("[data-i]").forEach(b => b.addEventListener("click", () => { const e = loadHist()[+b.dataset.i]; ids.forEach(id => { if (e.vals[id] !== undefined) $(id).value = e.vals[id]; }); selected = null; render(); }));
+    ul.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => { const x = loadHist(); x.splice(+b.dataset.del,1); saveHist(x); renderHist(); }));
+  }
+  $("save").addEventListener("click", () => {
+    if (!lastCalc || lastCalc.error) return;
+    const vals = {}; ids.forEach(id => vals[id] = $(id).value);
+    const h = loadHist();
+    h.unshift({name: $("match").value.trim() || "Unnamed match", profit: lastCalc.opts[0].minGuar, vals});
+    saveHist(h.slice(0,30)); renderHist();
+  });
+  $("clear").addEventListener("click", () => { ["a0","a1","a2","b0","b1","b2","l0","l1","l2","match"].forEach(id => $(id).value = ""); selected = null; render(); });
+
+  // ---- live matches (scraped Vegas × Polymarket) ----
+  const LIVE = Array.isArray(window.LIVE_MATCHES) ? window.LIVE_MATCHES : [];
+
+  // Best "back k on A, cover the other two on B" option, mirroring calc():
+  // guar = guaranteed on every result (settlement + 8% commission);
+  // ifLose = result when the Site A pick loses (adds the 20% refund).
+  function pureBest(A, B, S, tc, r, step){
+    const rnd = x => Math.round(x / step) * step;
+    let best = null;
+    for (let k = 0; k < 3; k++){
+      const a = A[k]; if (!a) continue;
+      const others = [0,1,2].filter(j => j !== k);
+      if (!others.every(j => B[j])) continue;
+      const bets = others.map(j => ({ j, amt: rnd(S * a / B[j]) }));
+      const total = bets.reduce((s,b) => s + b.amt, 0);
+      const settle = [0,1,2].map(i => i === k ? S*(a-1) - total : -S + bets.find(b => b.j === i).amt * B[i] - total);
+      const comm = tc * S;
+      const guar = Math.min(...settle) + comm;
+      const ifLose = Math.min(...others.map(i => settle[i] + comm + r * S));
+      if (!best || guar > best.guar) best = { k, guar, ifLose };
+    }
+    return best;
+  }
+
+  function renderLive(){
+    const tbl = $("liveTable"), empty = $("liveEmpty"), meta = $("liveMeta");
+    if (!LIVE.length){ if (tbl) tbl.innerHTML = ""; return; }
+    if (empty) empty.style.display = "none";
+    const S = num($("stake").value) || 1000;
+    const tc = (num($("acomm").value) ?? 0) / 100, r = (num($("refund").value) ?? 0) / 100;
+    const step = num($("round").value) || 1;
+    const rows = LIVE.map((m, idx) => {
+      const b = pureBest(m.a, m.b, S, tc, r, step);
+      return { m, idx, best: b, guar: b ? b.guar : -1e18 };
+    }).sort((x,y) => y.guar - x.guar);
+
+    const head = `<thead><tr><th>#</th><th>Match</th><th>Time</th><th>Back A</th>` +
+      `<th style="text-align:right">A · 1 / X / 2</th><th style="text-align:right">B · 1 / X / 2</th>` +
+      `<th style="text-align:right">Guaranteed</th><th style="text-align:right">If A pick loses</th></tr></thead>`;
+    const body = rows.map((row, i) => {
+      const m = row.m, b = row.best;
+      const g = b ? b.guar : null, lo = b ? b.ifLose : null;
+      const af = m.a.map(x => x ? x.toFixed(2) : "—").join(" / ");
+      const bf = m.b.map(x => x ? x.toFixed(2) : "—").join(" / ");
+      return `<tr data-idx="${row.idx}" style="cursor:pointer"><td>${i+1}</td>` +
+        `<td><strong>${esc(m.name)}</strong></td><td>${esc(m.time || "")}</td>` +
+        `<td>${b ? OUT[b.k] : "—"}</td><td class="n">${af}</td><td class="n">${bf}</td>` +
+        `<td class="n ${g == null ? "" : (g >= 0 ? "pos" : "neg")}">${g == null ? "—" : eur(g, true)}</td>` +
+        `<td class="n ${lo == null ? "" : (lo >= 0 ? "pos" : "neg")}">${lo == null ? "—" : eur(lo, true)}</td></tr>`;
+    }).join("");
+    tbl.innerHTML = head + "<tbody>" + body + "</tbody>";
+    tbl.querySelectorAll("tbody tr").forEach(tr =>
+      tr.addEventListener("click", () => loadLive(+tr.dataset.idx)));
+    if (meta && window.LIVE_META){
+      const mm = window.LIVE_META;
+      meta.textContent = `${LIVE.length} matches${mm.generatedAt ? " · " + mm.generatedAt : ""} · "Guaranteed" = every result (8% commission); "If A pick loses" adds the 20% refund · click a row`;
+    }
+  }
+
+  function loadLive(idx){
+    const m = LIVE[idx]; if (!m) return;
+    $("match").value = m.name;
+    [0,1,2].forEach(i => { $("a"+i).value = m.a[i] ?? ""; $("b"+i).value = m.b[i] ?? ""; $("l"+i).value = ""; });
+    selected = null; render(); renderLive();
+    const grid = document.querySelector(".grid");
+    if (grid) window.scrollTo({ top: grid.offsetTop - 12, behavior: "smooth" });
+  }
+
+  // recompute slip + live table on any input (stake/refund change re-ranks live table)
+  ids.forEach(id => $(id).addEventListener("input", () => { selected = null; render(); renderLive(); }));
+
+  if (LIVE.length){
+    renderLive();
+    loadLive(0);
+  } else {
+    // fallback example when no scraped data is injected yet
+    [["a0","3.26"],["a1","3.38"],["a2","2.28"],["b0","3.10"],["b1","3.50"],["b2","2.40"],["match","Example match"]]
+      .forEach(([id,v]) => $(id).value = v);
+  }
+  render(); renderHist();
+})();
+</script>
+</body>
+</html>

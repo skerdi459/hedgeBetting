@@ -1,0 +1,15 @@
+{
+  "name": "hedge-slip",
+  "version": "1.0.0",
+  "description": "Hedge Slip — cashback arbitrage calculator & tracker with SQLite-backed history",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.8.1",
+    "express": "^4.21.2"
+  }
+}

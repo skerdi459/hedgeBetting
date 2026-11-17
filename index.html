@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hedge Slip – cashback arbitrage calculator &amp; tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="dash-head">
+      <h1>Hedge Slip</h1>
+      <a class="small" href="/dashboard">History dashboard →</a>
+    </div>
+    <p>Enter the odds from Site A (the one that refunds part of a losing stake) and from Site B or an exchange. The slip tells you whether to play the match and exactly what to bet where — then track each match and keep a running balance per site.</p>
+  </header>
+
+  <!-- Balance dashboard -->
+  <section class="panel dash" aria-label="Balance">
+    <div class="dash-head">
+      <h2>Balance</h2>
+      <button id="editBank" class="small">Edit starting balances</button>
+    </div>
+
+    <form id="bankForm" class="bank-form" hidden>
+      <div class="row">
+        <div><label for="startA">Site A start (€)</label><input id="startA" type="text" inputmode="decimal" value="0"></div>
+        <div><label for="startB">Site B start (€)</label><input id="startB" type="text" inputmode="decimal" value="0"></div>
+        <div><label for="startE">Exchange start (€)</label><input id="startE" type="text" inputmode="decimal" value="0"></div>
+        <div><label for="commRate">Site A turnover commission (%)</label><input id="commRate" type="text" inputmode="decimal" value="8"></div>
+        <div><label for="lossRate">Site A loss refund (%)</label><input id="lossRate" type="text" inputmode="decimal" value="20"></div>
+      </div>
+      <div class="btns">
+        <button type="submit" class="primary">Save settings</button>
+        <button type="button" id="cancelBank">Cancel</button>
+      </div>
+    </form>
+
+    <div class="cards" id="cards"></div>
+    <div class="totals" id="totals"></div>
+    <div id="refunds"></div>
+  </section>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2>The match</h2>
+        <div class="row">
+          <div style="grid-column:1/-1"><label for="match">Match</label><input id="match" type="text" placeholder="e.g. Partizani – Tirana"></div>
+          <div><label for="stake">Site A stake (€)</label><input id="stake" type="text" inputmode="decimal" value="1000"></div>
+        </div>
+        <p class="hint">Site A pays 8% of turnover (set in <strong>Balance → Edit starting balances</strong>) + 20% of net loss. Change the rates there.</p>
+
+        <h2>Odds</h2>
+        <div class="pick modes" id="modeToggle" role="group" aria-label="Hedge mode">
+          <button type="button" data-mode="2way" aria-pressed="true">Two-way (double chance)</button>
+          <button type="button" data-mode="3way" aria-pressed="false">Three-way (cover both)</button>
+        </div>
+        <table class="odds">
+          <thead><tr><th></th><th class="a">Site A</th><th class="b col3">Site B</th><th class="dc col2">Cover (DC)</th><th class="x">Exchange lay</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><input class="a" id="a0" inputmode="decimal" aria-label="Site A odds for 1"></td><td class="col3"><input class="b" id="b0" inputmode="decimal" aria-label="Site B odds for 1"></td><td class="col2"><span class="dclab">X2</span><input class="dc" id="dc0" inputmode="decimal" aria-label="Site B double chance X2 odds"></td><td><input class="x" id="l0" inputmode="decimal" aria-label="Exchange lay odds for 1"></td></tr>
+            <tr><td>X</td><td><input class="a" id="a1" inputmode="decimal" aria-label="Site A odds for X"></td><td class="col3"><input class="b" id="b1" inputmode="decimal" aria-label="Site B odds for X"></td><td class="col2"><span class="dclab">12</span><input class="dc" id="dc1" inputmode="decimal" aria-label="Site B double chance 12 odds"></td><td><input class="x" id="l1" inputmode="decimal" aria-label="Exchange lay odds for X"></td></tr>
+            <tr><td>2</td><td><input class="a" id="a2" inputmode="decimal" aria-label="Site A odds for 2"></td><td class="col3"><input class="b" id="b2" inputmode="decimal" aria-label="Site B odds for 2"></td><td class="col2"><span class="dclab">1X</span><input class="dc" id="dc2" inputmode="decimal" aria-label="Site B double chance 1X odds"></td><td><input class="x" id="l2" inputmode="decimal" aria-label="Exchange lay odds for 2"></td></tr>
+          </tbody>
+        </table>
+        <p class="hint"><span class="col2">Two-way: fill the <strong>Site A</strong> odd for the side you back and its <strong>Cover (DC)</strong> double chance — back 1→cover X2, back X→cover 12, back 2→cover 1X. </span><span class="col3">Three-way: fill all three Site B odds. </span>Decimal odds. Commas work too (3,26). Exchange lay is optional.</p>
+
+        <label class="dutch-opt"><input type="checkbox" id="coverOnA"> Cover bets are on Site A too (dutch) — earns the 8% commission on the whole stake</label>
+
+        <label>Back on Site A <span style="font-weight:400">(the ticket you want to <em>lose</em> for the refund)</span></label>
+        <div class="pick" id="backPick" role="group" aria-label="Which result you back on Site A">
+          <button type="button" data-k="auto" aria-pressed="true">Auto (best)</button>
+          <button type="button" data-k="0" aria-pressed="false">1</button>
+          <button type="button" data-k="1" aria-pressed="false">X</button>
+          <button type="button" data-k="2" aria-pressed="false">2</button>
+        </div>
+        <p class="hint">You get the 28% refund only when this ticket <strong>loses</strong>. If this result actually comes in, there is <strong>no commission</strong> — that outcome is your loss.</p>
+
+        <div class="row">
+          <div><label for="comm">Exchange commission (%)</label><input id="comm" type="text" inputmode="decimal" value="2"></div>
+          <div><label for="minp">Minimum profit (% of stake)</label><input id="minp" type="text" inputmode="decimal" value="3"></div>
+          <div><label for="round">Round stakes to</label>
+            <select id="round"><option value="0.01">€0.01</option><option value="0.5">€0.50</option><option value="1" selected>€1</option><option value="5">€5</option></select></div>
+        </div>
+        <div class="btns">
+          <button class="primary" id="save">Save to tracker</button>
+          <button id="clear">Clear odds</button>
+        </div>
+        <p class="hint" style="margin-top:12px">Saving adds the match to the tracker as <strong>pending</strong> with the option shown in the slip. When the result is known, tap the winner to settle it into your balance.</p>
+      </div>
+    </div>
+
+    <div>
+      <div class="slip" id="slip" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <!-- Tracked matches -->
+  <section class="panel" style="margin-top:24px">
+    <div class="dash-head">
+      <h2>Tracked matches</h2>
+      <div class="filters" id="filters" role="group" aria-label="Filter matches">
+        <button data-f="all" class="small" aria-pressed="true">All</button>
+        <button data-f="pending" class="small" aria-pressed="false">Pending</button>
+        <button data-f="settled" class="small" aria-pressed="false">Settled</button>
+      </div>
+    </div>
+    <ul class="matches" id="matches"></ul>
+  </section>
+
+  <footer class="caveats">
+    <p><strong>Keep in mind:</strong> The 28% refund is <em>not</em> applied at settlement — matches settle on the real cash that moves. The refund is calculated monthly as 28% of your <strong>net</strong> Site A loss (losing stakes minus any winning-pick payouts), so a winning backed pick reduces it and a net-positive month earns nothing. See “Monthly refunds” in the dashboard; when a month's payout lands, press “Mark paid → Site A”. If the refund is a bonus/free bet rather than cash, lower the rate. Odds move between placing bets, so confirm each before the next. Bookmakers may limit accounts that arbitrage. Figures use rounded stakes, so results can differ by a few cents.</p>
+  </footer>
+</div>
+
+<script src="calc.js"></script>
+<script src="store.js"></script>
+<script src="app.js"></script>
+<script src="db-sync.js"></script>
+</body>
+</html>
