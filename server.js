@@ -12,6 +12,21 @@ const dbx = require("./db");
 const app = express();
 app.use(express.json({ limit: "1mb" }));
 
+// Optional HTTP Basic auth. Enabled only when HEDGE_PASSWORD is set (e.g. on a
+// public deploy); left open for local use. User defaults to "hedge".
+const AUTH_PASS = process.env.HEDGE_PASSWORD;
+const AUTH_USER = process.env.HEDGE_USER || "hedge";
+if (AUTH_PASS) {
+  app.use((req, res, next) => {
+    const hdr = req.headers.authorization || "";
+    const [, b64] = hdr.split(" ");
+    const [u, p] = Buffer.from(b64 || "", "base64").toString().split(":");
+    if (u === AUTH_USER && p === AUTH_PASS) return next();
+    res.set("WWW-Authenticate", 'Basic realm="Hedge Slip"').status(401).send("Authentication required");
+  });
+  console.log("Auth: password protection ENABLED (user: " + AUTH_USER + ")");
+}
+
 // --- API ---
 const api = express.Router();
 

@@ -11,11 +11,17 @@ services:
     plan: starter
     buildCommand: npm ci
     startCommand: node server.js
+    healthCheckPath: /api/health
     envVars:
       - key: HEDGE_HOST
         value: 0.0.0.0
       - key: HEDGE_DB
         value: /data/hedge.db
+      # Password-protect the public site. Render will prompt you to enter a
+      # value on first deploy (it is NOT stored in the repo). Log in with
+      # user "hedge" (or set HEDGE_USER) and this password.
+      - key: HEDGE_PASSWORD
+        sync: false
     disk:
       name: hedge-data
       mountPath: /data
