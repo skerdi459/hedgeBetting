@@ -60,7 +60,7 @@ app.use(express.static(__dirname, { extensions: ["html"] }));
 app.get("/", (_req, res) => res.sendFile(path.join(__dirname, "index.html")));
 app.get("/dashboard", (_req, res) => res.sendFile(path.join(__dirname, "dashboard.html")));
 
-const PORT = process.env.HEDGE_PORT || 3000;
+const PORT = process.env.HEDGE_PORT || process.env.PORT || 3000;
 const HOST = process.env.HEDGE_HOST || "127.0.0.1";
 app.listen(PORT, HOST, () => {
   console.log(`Hedge Slip running → http://${HOST === "0.0.0.0" ? "localhost" : HOST}:${PORT}`);

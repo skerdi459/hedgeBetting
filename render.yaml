@@ -1,0 +1,22 @@
+# Render Blueprint — deploy from the GitHub repo in a few clicks.
+# https://dashboard.render.com  →  New  →  Blueprint  →  pick this repo.
+#
+# NOTE: the persistent disk below keeps your SQLite history across restarts.
+# Disks require a paid instance (starter). On the free plan, remove the `disk:`
+# block — but then the database resets whenever the service restarts/sleeps.
+services:
+  - type: web
+    name: hedge-slip
+    runtime: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: node server.js
+    envVars:
+      - key: HEDGE_HOST
+        value: 0.0.0.0
+      - key: HEDGE_DB
+        value: /data/hedge.db
+    disk:
+      name: hedge-data
+      mountPath: /data
+      sizeGB: 1

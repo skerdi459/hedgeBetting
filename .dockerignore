@@ -1,0 +1,10 @@
+node_modules
+hedge.db
+hedge.db-shm
+hedge.db-wal
+.git
+.venv
+scraper/.venv
+scraper/__pycache__
+scraper/config.json
+hedge-slip.zip
