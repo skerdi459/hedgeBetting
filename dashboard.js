@@ -17,14 +17,31 @@
     deleted: "Deleted", bankroll: "Balances", month_paid: "Month paid", month_unpaid: "Month unpaid"
   };
 
-  Promise.all([
-    fetch("/api/state").then(r => r.json()),
-    fetch("/api/events?limit=2000").then(r => r.json()),
-    fetch("/api/health").then(r => r.json()).catch(() => null)
-  ]).then(([state, events, health]) => {
+  // Prefer the server (DB). If it's not there (e.g. the free static deploy),
+  // fall back to this browser's localStorage so the dashboard still works.
+  const readLocal = (k, def) => {
+    try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? def : v; }
+    catch (e) { return def; }
+  };
+  const loadState = () =>
+    fetch("/api/state").then(r => { if (!r.ok) throw 0; return r.json(); })
+      .then(s => ({ state: s, source: "db" }))
+      .catch(() => ({
+        state: { matches: readLocal("hedge-slip-matches", []), bankroll: readLocal("hedge-slip-bankroll", null) },
+        source: "local"
+      }));
+  const loadEvents = () =>
+    fetch("/api/events?limit=2000").then(r => { if (!r.ok) throw 0; return r.json(); }).catch(() => null);
+
+  Promise.all([loadState(), loadEvents()]).then(([{ state, source }, eventsRaw]) => {
     const matches = state.matches || [];
     const bank = state.bankroll || { commRate: 0.08, lossRate: 0.2 };
-    if (health && $("dbnote")) $("dbnote").textContent = "DB: " + health.db;
+    const events = eventsRaw || [];
+    if ($("dbnote")) {
+      $("dbnote").textContent = source === "db"
+        ? "Source: database."
+        : "Source: this browser's local storage (no server — history is per-device).";
+    }
 
     // ---- totals ----
     const settled = matches.filter(m => m.status === "settled" && m.settlement);
@@ -85,11 +102,15 @@
     }
 
     // ---- activity history ----
-    $("evcount").textContent = events.length + " event" + (events.length === 1 ? "" : "s");
     const eBody = $("events").querySelector("tbody");
-    if (!events.length) {
+    if (eventsRaw === null) {
+      $("evcount").textContent = "server only";
+      eBody.innerHTML = `<tr><td class="muted">The timestamped activity log is recorded by the server (database) version. This free static site doesn't keep one — totals and the monthly breakdown above are rebuilt from your saved matches.</td></tr>`;
+    } else if (!events.length) {
+      $("evcount").textContent = "0 events";
       eBody.innerHTML = `<tr><td class="muted">No activity yet. Save a match in the calculator.</td></tr>`;
     } else {
+      $("evcount").textContent = events.length + " event" + (events.length === 1 ? "" : "s");
       eBody.innerHTML =
         `<tr><th>When</th><th>Event</th><th>Match</th><th>Detail</th></tr>` +
         events.map(ev => {
@@ -114,8 +135,8 @@
         }).join("");
     }
   }).catch(err => {
+    console.error("dashboard render failed", err);
     document.querySelector(".wrap").insertAdjacentHTML("beforeend",
-      `<section class="panel" style="margin-top:24px"><p class="neg">Couldn't reach the database API. Is the server running? (<code>npm start</code>)</p></section>`);
-    console.error(err);
+      `<section class="panel" style="margin-top:24px"><p class="neg">Something went wrong rendering the dashboard — see the browser console.</p></section>`);
   });
 })();
