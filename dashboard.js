@@ -17,22 +17,19 @@
     deleted: "Deleted", bankroll: "Balances", month_paid: "Month paid", month_unpaid: "Month unpaid"
   };
 
-  // ---- live arbitrage opportunities (from the scraper's arbs.json) ----
-  (function renderArbs() {
+  // ---- live arbitrage opportunities (from the scraper) ----
+  (function arbSection() {
     const SITE = { A: "Vegas777", B: "bwin" };
     const tb = $("arbs") && $("arbs").querySelector("tbody");
     const upd = $("arbUpdated");
+    const scanBtn = $("scanBtn");
     if (!tb) return;
     const leg = l => `${esc(l.outcome)} @${(+l.odd).toFixed(2)} <b>${esc(SITE[l.site] || l.site)}</b> · €${(+l.stake).toFixed(0)}`;
-    fetch("/api/arbs").then(r => (r.ok ? r.json() : null)).then(data => {
-      const arbs = (data && data.arbs) || [];
-      if (upd) {
-        upd.textContent = data && data.updatedAt
-          ? "scanned " + dt(data.updatedAt)
-          : "no scan yet — run scraper/run_arb.py";
-      }
-      if (!arbs.length) {
-        tb.innerHTML = `<tr><td class="muted">No surebets right now. Run <code>run_arb.py</code> in the scraper to refresh.</td></tr>`;
+
+    function paint(arbs, updatedAt) {
+      if (upd) upd.textContent = updatedAt ? "scanned " + dt(updatedAt) : "no scan yet";
+      if (!arbs || !arbs.length) {
+        tb.innerHTML = `<tr><td class="muted">No surebets found. Capture odds (bet_scanner.py + bwin_odds.py), then press <b>Scan now</b>.</td></tr>`;
         return;
       }
       tb.innerHTML =
@@ -47,9 +44,43 @@
           <td class="n pos">+${(a.roi * 100).toFixed(2)}%</td>
           <td class="n pos">${eur(a.profit, true)}</td>
         </tr>`).join("");
+    }
+
+    // initial load
+    fetch("/api/arbs").then(r => (r.ok ? r.json() : null)).then(data => {
+      paint((data && data.arbs) || [], data && data.updatedAt);
     }).catch(() => {
       if (upd) upd.textContent = "scanner API unavailable (static deploy)";
+      if (scanBtn) scanBtn.disabled = true;
       tb.innerHTML = `<tr><td class="muted">Live arbitrage needs the server version (<code>npm start</code>) + the scraper.</td></tr>`;
+    });
+
+    // "Scan now" → re-run the scanner on the server
+    if (scanBtn) scanBtn.addEventListener("click", () => {
+      const stake = parseFloat(($("arbStake").value || "1000").replace(",", ".")) || 1000;
+      const label = scanBtn.textContent;
+      scanBtn.disabled = true;
+      scanBtn.textContent = "Scanning…";
+      if (upd) upd.textContent = "running scanner…";
+      fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stake })
+      }).then(r => r.json()).then(res => {
+        if (!res.ok) {
+          if (upd) upd.textContent = "scan failed";
+          tb.innerHTML = `<tr><td class="muted"><b>Scan failed.</b> ${esc(res.error || "unknown error")}<br>
+            Make sure you've captured both sites first: <code>bet_scanner.py --manual-login --json out.json</code>
+            and <code>bwin_odds.py --manual --json bwin.json</code>.</td></tr>`;
+          return;
+        }
+        paint(res.arbs, Date.now());
+      }).catch(() => {
+        if (upd) upd.textContent = "scan error (is the server running?)";
+      }).finally(() => {
+        scanBtn.disabled = false;
+        scanBtn.textContent = label;
+      });
     });
   })();
 

@@ -8,6 +8,7 @@
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
+const { execFile } = require("child_process");
 const dbx = require("./db");
 
 const app = express();
@@ -78,6 +79,30 @@ api.get("/arbs", (_req, res) => {
   } catch (e) {
     res.json({ updatedAt: null, count: 0, arbs: [] });
   }
+});
+
+// "Scan now" — re-run the arbitrage scanner over the captured odds
+// (scraper/out.json + scraper/bwin.json) and regenerate the HTML report.
+api.post("/scan", (req, res) => {
+  const stake = Number(req.body && req.body.stake);
+  const stakeArg = Number.isFinite(stake) && stake > 0 ? String(stake) : "1000";
+  const dir = path.join(__dirname, "scraper");
+  const venvPy = path.join(dir, ".venv", "bin", "python");
+  const py = fs.existsSync(venvPy) ? venvPy : "python3";
+  const tail = s => (s || "").trim().split("\n").filter(Boolean).slice(-4).join("\n");
+
+  execFile(py, ["run_arb.py", "--stake", stakeArg, "--min-roi", "0"],
+    { cwd: dir, timeout: 120000 }, (err, stdout, stderr) => {
+      // best-effort refresh of the standalone HTML report, then respond
+      execFile(py, ["make_arb_report.py"], { cwd: dir, timeout: 30000 }, () => {
+        let arbs = [];
+        try { arbs = JSON.parse(fs.readFileSync(path.join(dir, "arbs.json"), "utf8")); } catch (e) {}
+        if (err && !arbs.length) {
+          return res.json({ ok: false, error: tail(stderr) || tail(stdout) || err.message, arbs: [] });
+        }
+        res.json({ ok: true, count: arbs.length, arbs, log: tail(stdout) });
+      });
+    });
 });
 
 app.use("/api", api);

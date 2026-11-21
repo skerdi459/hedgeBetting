@@ -24,6 +24,9 @@
   .ev.deleted{background:var(--loss-soft);color:var(--loss)}
   .ev.bankroll,.ev.month_paid,.ev.month_unpaid{background:var(--x-soft);color:var(--x)}
   .muted{color:var(--muted)}
+  .arb-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .arb-controls input{width:80px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
+  #scanBtn[disabled]{opacity:.6;cursor:progress}
 </style>
 </head>
 <body>
@@ -39,7 +42,12 @@
   <section class="panel" id="arbPanel">
     <div class="dash-head">
       <h2>Live arbitrage — Vegas777 × bwin</h2>
-      <span class="muted" id="arbUpdated"></span>
+      <div class="arb-controls">
+        <label for="arbStake" class="muted">Stake €</label>
+        <input id="arbStake" type="text" inputmode="decimal" value="1000">
+        <button id="scanBtn" class="small primary">Scan now</button>
+        <span class="muted" id="arbUpdated"></span>
+      </div>
     </div>
     <div class="tbl-wrap"><table class="hist" id="arbs"><tbody></tbody></table></div>
   </section>
