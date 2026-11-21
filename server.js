@@ -7,6 +7,7 @@
  */
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const dbx = require("./db");
 
 const app = express();
@@ -66,6 +67,17 @@ api.put("/months/:key", (req, res) =>
 api.get("/events", (req, res) => {
   const limit = Math.min(parseInt(req.query.limit, 10) || 500, 5000);
   res.json(dbx.listEvents(limit));
+});
+
+// Live arbitrage opportunities produced by the scraper (scraper/arbs.json)
+api.get("/arbs", (_req, res) => {
+  const p = path.join(__dirname, "scraper", "arbs.json");
+  try {
+    const arbs = JSON.parse(fs.readFileSync(p, "utf8"));
+    res.json({ updatedAt: fs.statSync(p).mtimeMs, count: arbs.length, arbs });
+  } catch (e) {
+    res.json({ updatedAt: null, count: 0, arbs: [] });
+  }
 });
 
 app.use("/api", api);

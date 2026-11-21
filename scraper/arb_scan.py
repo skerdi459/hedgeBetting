@@ -104,6 +104,10 @@ def scan_market(ga, gb, market_key, stake):
         return max(cands, key=lambda x: x[0]) if cands else (None, None)
 
     (o1, s1site), (o2, s2site) = best(l1), best(l2)
+    # A placeable two-site arb needs its two legs at DIFFERENT sites — a single
+    # book never prices 1/O1+1/O2 < 1, so same-site "arbs" are noise.
+    if s1site and s1site == s2site:
+        return None
     m = two_way_arb(o1, o2)
     if not m or m["arb"] >= 1.0:
         return None

@@ -17,6 +17,42 @@
     deleted: "Deleted", bankroll: "Balances", month_paid: "Month paid", month_unpaid: "Month unpaid"
   };
 
+  // ---- live arbitrage opportunities (from the scraper's arbs.json) ----
+  (function renderArbs() {
+    const SITE = { A: "Vegas777", B: "bwin" };
+    const tb = $("arbs") && $("arbs").querySelector("tbody");
+    const upd = $("arbUpdated");
+    if (!tb) return;
+    const leg = l => `${esc(l.outcome)} @${(+l.odd).toFixed(2)} <b>${esc(SITE[l.site] || l.site)}</b> · €${(+l.stake).toFixed(0)}`;
+    fetch("/api/arbs").then(r => (r.ok ? r.json() : null)).then(data => {
+      const arbs = (data && data.arbs) || [];
+      if (upd) {
+        upd.textContent = data && data.updatedAt
+          ? "scanned " + dt(data.updatedAt)
+          : "no scan yet — run scraper/run_arb.py";
+      }
+      if (!arbs.length) {
+        tb.innerHTML = `<tr><td class="muted">No surebets right now. Run <code>run_arb.py</code> in the scraper to refresh.</td></tr>`;
+        return;
+      }
+      tb.innerHTML =
+        `<tr><th>Game</th><th>Time</th><th>Market</th><th>Back 1</th><th>Back 2</th>` +
+        `<th class="n">ROI</th><th class="n">Profit</th></tr>` +
+        arbs.map(a => `<tr>
+          <td>${esc(a.game)}</td>
+          <td class="muted">${esc(a.time || "")}</td>
+          <td>${esc(a.market)}</td>
+          <td>${leg(a.leg1)}</td>
+          <td>${leg(a.leg2)}</td>
+          <td class="n pos">+${(a.roi * 100).toFixed(2)}%</td>
+          <td class="n pos">${eur(a.profit, true)}</td>
+        </tr>`).join("");
+    }).catch(() => {
+      if (upd) upd.textContent = "scanner API unavailable (static deploy)";
+      tb.innerHTML = `<tr><td class="muted">Live arbitrage needs the server version (<code>npm start</code>) + the scraper.</td></tr>`;
+    });
+  })();
+
   // Prefer the server (DB). If it's not there (e.g. the free static deploy),
   // fall back to this browser's localStorage so the dashboard still works.
   const readLocal = (k, def) => {
