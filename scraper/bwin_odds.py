@@ -263,6 +263,82 @@ def parse_bwin(html):
     return []
 
 
+# ----------------------------- auto-walk all matches -----------------------------
+def _collect_event_links(driver):
+    """Gather every /sports/events/ match link currently in the list DOM."""
+    from selenium.webdriver.common.by import By
+    links = []
+    seen = set()
+    try:
+        anchors = driver.find_elements(By.CSS_SELECTOR, "a[href*='/sports/events/']")
+    except Exception:
+        anchors = []
+    for a in anchors:
+        try:
+            href = (a.get_attribute("href") or "").split("?")[0]
+            if "/sports/events/" in href and href not in seen:
+                seen.add(href)
+                links.append(href)
+        except Exception:
+            continue
+    return links
+
+
+def fetch_bwin_all(url, manual=True, headless=False, max_games=0, wait=20):
+    """Walk the football list, open each match, expand Over/Under and collect it.
+    Returns a list of games in the common shape (only those with an O/U market)."""
+    import re, time as _t
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+
+    opts = Options()
+    if headless:
+        opts.add_argument("--headless=new")
+    opts.add_argument("--window-size=1500,1000")
+    opts.add_argument("--disable-blink-features=AutomationControlled")
+    opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+    driver = webdriver.Chrome(options=opts)
+    games = []
+    try:
+        driver.get(url)
+        if manual:
+            input("\n>>> Accept cookies and let the FOOTBALL list load (scroll down to load "
+                  "more matches if you want them all).\n    Then press Enter — I'll open every "
+                  "match and grab Over/Under...")
+        links = _collect_event_links(driver)
+        print(f"Found {len(links)} match links on the list.")
+        if max_games:
+            links = links[:max_games]
+        for i, link in enumerate(links, 1):
+            try:
+                driver.get(link)
+                _t.sleep(2)
+                _expand_over_under(driver)
+                html = ""
+                for _ in range(wait):
+                    try:
+                        html = driver.execute_script(_DEEP_JS)
+                    except Exception:
+                        html = driver.page_source
+                    if re.search(r"\b[1-9]\d?\.\d{2}\b", html or ""):
+                        break
+                    _t.sleep(1)
+                parsed = parse_bwin(html)
+                if parsed:
+                    games.extend(parsed)
+                    ou = parsed[0]["markets"].get("OU2.5", {})
+                    print(f"  [{i}/{len(links)}] {parsed[0]['home']} – {parsed[0]['away']}  "
+                          f"O {ou.get('Over')} / U {ou.get('Under')}")
+                else:
+                    print(f"  [{i}/{len(links)}] no Over/Under found")
+            except Exception as e:
+                print(f"  [{i}/{len(links)}] error: {repr(e)[:80]}")
+        print(f"\nCollected Over/Under for {len(games)} match(es).")
+        return games
+    finally:
+        driver.quit()
+
+
 # ----------------------------- cli -----------------------------
 def main():
     ap = argparse.ArgumentParser(description="Fetch/parse bwin football O/U odds")
@@ -270,19 +346,27 @@ def main():
     ap.add_argument("--html", help="parse a saved page instead of scraping")
     ap.add_argument("--manual", action="store_true", help="drive a real browser by hand (recommended)")
     ap.add_argument("--headless", action="store_true", help="run hidden (often blocked by bwin)")
+    ap.add_argument("--all", action="store_true", help="auto-walk EVERY match on the list for Over/Under")
+    ap.add_argument("--max", type=int, default=0, help="limit how many matches to walk (0 = all)")
     ap.add_argument("--json", help="write parsed games to this JSON file")
     args = ap.parse_args()
 
-    if args.html:
-        with open(os.path.join(HERE, args.html) if not os.path.isabs(args.html) else args.html,
-                  encoding="utf-8") as f:
-            html = f.read()
-    else:
+    if args.all and not args.html:
         cfg = load_bwin_cfg()
         url = args.url or cfg.get("odds_url") or "https://www.bwin.com/en/sports/football-4"
-        html = fetch_bwin(url, manual=args.manual or not args.headless, headless=args.headless)
+        games = fetch_bwin_all(url, manual=args.manual or not args.headless,
+                               headless=args.headless, max_games=args.max)
+    else:
+        if args.html:
+            with open(os.path.join(HERE, args.html) if not os.path.isabs(args.html) else args.html,
+                      encoding="utf-8") as f:
+                html = f.read()
+        else:
+            cfg = load_bwin_cfg()
+            url = args.url or cfg.get("odds_url") or "https://www.bwin.com/en/sports/football-4"
+            html = fetch_bwin(url, manual=args.manual or not args.headless, headless=args.headless)
+        games = parse_bwin(html)
 
-    games = parse_bwin(html)
     print(f"Parsed {len(games)} bwin games with an Over/Under 2.5 market.")
     if not games:
         print("  → 0 games. Open last_bwin.html and adjust the selectors in SELECTORS, "

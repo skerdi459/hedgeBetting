@@ -29,6 +29,8 @@ def main():
     ap.add_argument("--min-roi", type=float, default=0.0)
     ap.add_argument("--skip-vegas", action="store_true", help="reuse existing out.json")
     ap.add_argument("--skip-bwin", action="store_true", help="reuse existing bwin.json")
+    ap.add_argument("--bwin-all", action="store_true",
+                    help="auto-walk every bwin match for Over/Under (vs one match)")
     args = ap.parse_args()
 
     # 1) Vegas777 (manual login — handles the CAPTCHA)
@@ -47,8 +49,11 @@ def main():
         print("\n=== STEP 2/3 · bwin ===")
         bcfg = bwin_odds.load_bwin_cfg()
         url = bcfg.get("odds_url") or "https://www.bwin.com/en/sports/football-4"
-        bhtml = bwin_odds.fetch_bwin(url, manual=True)
-        bgames = bwin_odds.parse_bwin(bhtml)
+        if args.bwin_all:
+            bgames = bwin_odds.fetch_bwin_all(url, manual=True)
+        else:
+            bhtml = bwin_odds.fetch_bwin(url, manual=True)
+            bgames = bwin_odds.parse_bwin(bhtml)
         json.dump(bgames, open(os.path.join(HERE, "bwin.json"), "w"), indent=2, ensure_ascii=False)
         print(f"bwin: parsed {len(bgames)} games with Over/Under to bwin.json")
         if not bgames:
