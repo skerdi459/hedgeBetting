@@ -169,40 +169,64 @@ def _is_under(label):
     return l.startswith("u") or "under" in l or l.startswith("-") or "menos" in l
 
 
+def _panel_options(panel):
+    """Return [(name, odd)] for the ms-option cells inside a market panel."""
+    out = []
+    for opt in panel.select("ms-option, ms-event-pick"):
+        name_el = opt.select_one(".name")
+        val_el = opt.select_one(".option-value, .value.option-value, .value")
+        name = name_el.get_text(" ", strip=True) if name_el else ""
+        odd = _num(val_el.get_text() if val_el else "")
+        if name and odd:
+            out.append((name, odd))
+    return out
+
+
 def parse_bwin(html):
-    """Best-effort: pull fixtures + an Over/Under 2.5 market into the common shape."""
+    """Parse a bwin EVENT-DETAILS page into the common game shape.
+
+    Real structure (confirmed from a live page): the scoreboard holds the two
+    participants in `.participant-name-value`; each market is an `ms-option-panel`
+    whose `[slot=title]` is the market name and whose `ms-option` cells carry a
+    `.name` and an `.option-value`. Over/Under lives in the "Total Goals" panel —
+    which is a collapsed accordion by default, so its odds are only present if the
+    panel was expanded before the page was captured (see fetch_bwin).
+    """
     from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, "html.parser")
-    games = []
-    for ev in soup.select(SELECTORS["event"]):
-        parts = [p.get_text(strip=True) for p in ev.select(SELECTORS["participants"]) if p.get_text(strip=True)]
-        if len(parts) < 2:
+
+    # two participants from the scoreboard (dedupe, keep order)
+    names = []
+    for e in soup.select(".participant-name-value, ms-scoreboard-participant .participant-name"):
+        t = e.get_text(" ", strip=True)
+        if t and t not in names:
+            names.append(t)
+    if len(names) < 2:
+        return []   # not an event page we can read (e.g. still the loading shell)
+    home, away = names[0], names[1]
+
+    markets = {}
+    for panel in soup.select("ms-option-panel"):
+        title_el = panel.select_one('[slot="title"]')
+        title = (title_el.get_text(" ", strip=True) if title_el else "").lower()
+        opts = _panel_options(panel)
+        if not opts:
             continue
-        home, away = parts[0], parts[1]
-        tm_el = ev.select_one(SELECTORS["time"])
-        tm = tm_el.get_text(strip=True) if tm_el else ""
+        # Over/Under (Total Goals)
+        if "total goals" in title or "over/under" in title or "over / under" in title:
+            over = under = None
+            for name, odd in opts:
+                nl = name.lower()
+                if over is None and ("over" in nl or nl.startswith("o")):
+                    over = odd
+                elif under is None and ("under" in nl or nl.startswith("u")):
+                    under = odd
+            if over and under:
+                markets["OU2.5"] = {"Over": over, "Under": under}
 
-        over = under = None
-        for cell in ev.select(SELECTORS["option"]):
-            lab_el = cell.select_one(SELECTORS["option_label"])
-            val_el = cell.select_one(SELECTORS["option_value"])
-            label = lab_el.get_text(strip=True) if lab_el else cell.get_text(" ", strip=True)
-            value = _num(val_el.get_text() if val_el else "")
-            if value is None:
-                continue
-            # only accept the 2.5 line (ignore other totals)
-            if "2.5" in label or "2,5" in label or label in ("Over", "Under", "O", "U"):
-                if over is None and _is_over(label):
-                    over = value
-                elif under is None and _is_under(label):
-                    under = value
-
-        markets = {}
-        if over and under:
-            markets["OU2.5"] = {"Over": over, "Under": under}
-        if markets:
-            games.append({"home": home, "away": away, "time": tm, "markets": markets})
-    return games
+    if markets:
+        return [{"home": home, "away": away, "time": "", "markets": markets}]
+    return []
 
 
 # ----------------------------- cli -----------------------------
