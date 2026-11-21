@@ -45,8 +45,57 @@ def load_bwin_cfg():
     return {}
 
 
-# ----------------------------- fetch -----------------------------
-def fetch_bwin(url, manual=True, headless=False, wait=30):
+# bwin renders odds into SHADOW DOM, so page_source is empty of odds. This JS
+# walks every shadow root and returns the fully-rendered HTML (light + shadow).
+_DEEP_JS = r"""
+function deep(root){
+  let out = "";
+  const els = root.querySelectorAll('*');
+  for (const el of els){
+    if (el.shadowRoot){
+      out += el.shadowRoot.innerHTML;
+      out += deep(el.shadowRoot);
+    }
+  }
+  return out;
+}
+return document.documentElement.outerHTML + deep(document);
+"""
+
+
+def _dump_api_json(driver):
+    """Grab bwin's odds API (CDS) JSON responses from the network log."""
+    import re
+    blobs = []
+    try:
+        logs = driver.get_log("performance")
+    except Exception:
+        return blobs
+    seen = set()
+    for entry in logs:
+        try:
+            msg = json.loads(entry["message"])["message"]
+        except Exception:
+            continue
+        if msg.get("method") != "Network.responseReceived":
+            continue
+        resp = msg.get("params", {}).get("response", {})
+        url = resp.get("url", "")
+        rid = msg["params"].get("requestId")
+        if rid in seen:
+            continue
+        if re.search(r"cds-api|bettingoffer|fixtures|offer", url, re.I):
+            seen.add(rid)
+            try:
+                body = driver.execute_cdp_cmd("Network.getResponseBody", {"requestId": rid})
+                blobs.append({"url": url, "body": body.get("body", "")})
+            except Exception:
+                pass
+    return blobs
+
+
+def fetch_bwin(url, manual=True, headless=False, wait=40):
+    import re
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
 
@@ -56,19 +105,47 @@ def fetch_bwin(url, manual=True, headless=False, wait=30):
     opts.add_argument("--window-size=1500,1000")
     opts.add_argument("--disable-blink-features=AutomationControlled")
     opts.add_experimental_option("excludeSwitches", ["enable-automation"])
+    opts.set_capability("goog:loggingPrefs", {"performance": "ALL"})
     driver = webdriver.Chrome(options=opts)
     try:
+        try:
+            driver.execute_cdp_cmd("Network.enable", {})
+        except Exception:
+            pass
         driver.get(url)
         if manual:
             input("\n>>> In the browser: accept cookies, log in if needed, and open the "
-                  "FOOTBALL list on the OVER/UNDER market.\n    Then press Enter here to capture the page...")
+                  "FOOTBALL list on the OVER/UNDER (Total Goals) market.\n    "
+                  "Then press Enter here to capture the page...")
+
+        # Poll the DEEP (shadow-DOM-inclusive) HTML until real odds appear.
+        html = ""
+        for i in range(wait):
+            try:
+                html = driver.execute_script(_DEEP_JS)
+            except Exception:
+                html = driver.page_source
+            n_odds = len(re.findall(r"\b[1-9]\d?\.\d{2}\b", html or ""))
+            if n_odds >= 10:
+                print(f"  odds rendered ({n_odds} decimal values found) after {i}s")
+                break
+            time.sleep(1)
         else:
-            time.sleep(wait)
-        html = driver.page_source
+            print("  ⚠ still few/no odds in the DOM after waiting — saving what we have.")
+
         dump = os.path.join(HERE, "last_bwin.html")
         with open(dump, "w", encoding="utf-8") as f:
-            f.write(html)
-        print(f"Saved raw bwin page to {dump} ({len(html)} bytes)")
+            f.write(html or "")
+        print(f"Saved deep bwin DOM to {dump} ({len(html or '')} bytes)")
+
+        # Also save the raw odds API JSON (most reliable source to parse).
+        blobs = _dump_api_json(driver)
+        if blobs:
+            apath = os.path.join(HERE, "bwin_api.json")
+            with open(apath, "w", encoding="utf-8") as f:
+                json.dump(blobs, f, ensure_ascii=False)
+            print(f"Captured {len(blobs)} bwin API response(s) to {apath} "
+                  f"({sum(len(b['body']) for b in blobs)} bytes)")
         return html
     finally:
         driver.quit()
