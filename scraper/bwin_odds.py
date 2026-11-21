@@ -94,6 +94,38 @@ def _dump_api_json(driver):
     return blobs
 
 
+def _expand_over_under(driver):
+    """Click open any collapsed 'Total Goals' / 'Over/Under' market so bwin
+    lazy-loads its odds into the DOM before we capture."""
+    import time as _t
+    from selenium.webdriver.common.by import By
+    titles = ["total goals", "over/under", "over / under", "goals over/under"]
+    try:
+        headers = driver.find_elements(By.CSS_SELECTOR, "[slot='title'], .ds-accordion-header")
+    except Exception:
+        headers = []
+    clicked = 0
+    for h in headers:
+        try:
+            txt = (h.text or "").strip().lower()
+            if any(t in txt for t in titles):
+                # click the header (or its clickable ancestor button)
+                target = h
+                try:
+                    target = h.find_element(By.XPATH, "./ancestor-or-self::button[1]")
+                except Exception:
+                    pass
+                driver.execute_script("arguments[0].click();", target)
+                clicked += 1
+                _t.sleep(1)
+        except Exception:
+            continue
+    if clicked:
+        print(f"  expanded {clicked} Over/Under market(s)")
+        _t.sleep(2)
+    return clicked
+
+
 def fetch_bwin(url, manual=True, headless=False, wait=40):
     import re
     from selenium import webdriver
@@ -114,9 +146,11 @@ def fetch_bwin(url, manual=True, headless=False, wait=40):
             pass
         driver.get(url)
         if manual:
-            input("\n>>> In the browser: accept cookies, log in if needed, and open the "
-                  "FOOTBALL list on the OVER/UNDER (Total Goals) market.\n    "
-                  "Then press Enter here to capture the page...")
+            input("\n>>> In the browser: accept cookies, then OPEN A MATCH (click a game) so "
+                  "its markets show.\n    Then press Enter here — I'll expand Over/Under and capture...")
+
+        # Expand any collapsed "Total Goals" / "Over/Under" market so its odds load.
+        _expand_over_under(driver)
 
         # Poll the DEEP (shadow-DOM-inclusive) HTML until real odds appear.
         html = ""
