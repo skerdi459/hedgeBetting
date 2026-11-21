@@ -263,6 +263,80 @@ def parse_bwin(html):
     return []
 
 
+def parse_bwin_api(path=None):
+    """Parse bwin's captured CDS API JSON (bwin_api.json) into the common shape.
+
+    This is the RELIABLE source: each football fixture carries a "Total Goals"
+    market with attr=="2.5" whose options ("Over 2,5"/"Under 2,5") hold the real
+    decimal odds in price.odds. Far better than scraping the DOM (which lists many
+    goal lines and is easy to misread).
+    """
+    path = path or os.path.join(HERE, "bwin_api.json")
+    with open(path, encoding="utf-8") as f:
+        blobs = json.load(f)
+
+    fixtures = []
+    def walk(o):
+        if isinstance(o, dict):
+            if "participants" in o and ("games" in o or "optionMarkets" in o):
+                fixtures.append(o)
+            for v in o.values():
+                walk(v)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v)
+    for b in blobs:
+        body = b.get("body", "") if isinstance(b, dict) else ""
+        if body[:1] in "{[":
+            try:
+                walk(json.loads(body))
+            except Exception:
+                pass
+
+    gval = lambda x: x.get("value") if isinstance(x, dict) else x
+    seen, games = set(), []
+    for fx in fixtures:
+        sport = fx.get("sport") or {}
+        if isinstance(sport, dict) and sport.get("id") not in (4, None):
+            continue  # football only (sport id 4)
+        parts = [gval(p.get("name")) for p in fx.get("participants", []) if gval(p.get("name"))]
+        name = gval(fx.get("name")) or ""
+        if len(parts) >= 2:
+            home, away = parts[0], parts[1]
+        elif " - " in name:
+            home, away = name.split(" - ", 1)
+        else:
+            continue
+
+        over = under = None
+        for g in (fx.get("games") or []) + (fx.get("optionMarkets") or []):
+            if str(gval(g.get("name")) or "").lower() != "total goals":
+                continue
+            if str(g.get("attr")) != "2.5":
+                continue
+            for o in (g.get("options") or g.get("results") or []):
+                onm = str(gval(o.get("name")) or "").lower()
+                odd = (o.get("price") or {}).get("odds")
+                if not odd:
+                    continue
+                if "over" in onm and over is None:
+                    over = float(odd)
+                elif "under" in onm and under is None:
+                    under = float(odd)
+            if over and under:
+                break
+
+        key = (str(home).strip().lower(), str(away).strip().lower())
+        if over and under and key not in seen:
+            seen.add(key)
+            games.append({
+                "home": str(home).strip(), "away": str(away).strip(),
+                "time": gval(fx.get("startDate")) or "",
+                "markets": {"OU2.5": {"Over": over, "Under": under}}
+            })
+    return games
+
+
 # ----------------------------- auto-walk all matches -----------------------------
 def _collect_event_links(driver):
     """Gather every /sports/events/ match link currently in the list DOM."""
@@ -348,10 +422,15 @@ def main():
     ap.add_argument("--headless", action="store_true", help="run hidden (often blocked by bwin)")
     ap.add_argument("--all", action="store_true", help="auto-walk EVERY match on the list for Over/Under")
     ap.add_argument("--max", type=int, default=0, help="limit how many matches to walk (0 = all)")
+    ap.add_argument("--api", action="store_true", help="parse the saved bwin_api.json (no browser)")
     ap.add_argument("--json", help="write parsed games to this JSON file")
     args = ap.parse_args()
 
-    if args.all and not args.html:
+    API_PATH = os.path.join(HERE, "bwin_api.json")
+
+    if args.api:
+        games = parse_bwin_api(API_PATH)
+    elif args.all and not args.html:
         cfg = load_bwin_cfg()
         url = args.url or cfg.get("odds_url") or "https://www.bwin.com/en/sports/football-4"
         games = fetch_bwin_all(url, manual=args.manual or not args.headless,
@@ -361,11 +440,15 @@ def main():
             with open(os.path.join(HERE, args.html) if not os.path.isabs(args.html) else args.html,
                       encoding="utf-8") as f:
                 html = f.read()
+            games = parse_bwin(html)
         else:
             cfg = load_bwin_cfg()
             url = args.url or cfg.get("odds_url") or "https://www.bwin.com/en/sports/football-4"
-            html = fetch_bwin(url, manual=args.manual or not args.headless, headless=args.headless)
-        games = parse_bwin(html)
+            fetch_bwin(url, manual=args.manual or not args.headless, headless=args.headless)
+            # prefer the clean API capture; fall back to the DOM if needed
+            games = parse_bwin_api(API_PATH) if os.path.exists(API_PATH) else []
+            if not games:
+                print("  (API parse empty — falling back to DOM parse)")
 
     print(f"Parsed {len(games)} bwin games with an Over/Under 2.5 market.")
     if not games:

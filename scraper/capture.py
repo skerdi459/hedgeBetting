@@ -52,8 +52,12 @@ def main():
         if args.bwin_all:
             bgames = bwin_odds.fetch_bwin_all(url, manual=True)
         else:
-            bhtml = bwin_odds.fetch_bwin(url, manual=True)
-            bgames = bwin_odds.parse_bwin(bhtml)
+            # capture the list (also dumps bwin_api.json) then parse the clean API JSON
+            bwin_odds.fetch_bwin(url, manual=True)
+            api_path = os.path.join(HERE, "bwin_api.json")
+            bgames = bwin_odds.parse_bwin_api(api_path) if os.path.exists(api_path) else []
+            if not bgames:
+                print("  (API empty — scroll the bwin list to load matches before pressing Enter)")
         json.dump(bgames, open(os.path.join(HERE, "bwin.json"), "w"), indent=2, ensure_ascii=False)
         print(f"bwin: parsed {len(bgames)} games with Over/Under to bwin.json")
         if not bgames:
