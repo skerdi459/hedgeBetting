@@ -21,3 +21,7 @@ node_modules/
 hedge.db
 hedge.db-shm
 hedge.db-wal
+
+# generated scraper reports / captures
+scraper/arb_report.html
+scraper/last_bwin.html
